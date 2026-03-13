@@ -9,6 +9,7 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Courier New',monospace;background:#0a0e14;color:#e2e8f0;min-height:100vh}
@@ -20,6 +21,7 @@ input:focus,textarea:focus{border-color:#00ff9d;box-shadow:0 0 0 2px #00ff9d22}
 .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .btn-secondary{background:transparent;color:#00ff9d;border:1px solid #00ff9d44}.btn-secondary:hover{border-color:#00ff9d;background:#00ff9d11}
 .btn-danger{background:transparent;color:#ff4444;border:1px solid #ff444444}.btn-danger:hover{border-color:#ff4444;background:#ff444411}
+.btn-excel{background:#1d6f42;color:#fff;border:1px solid #2a9d5c}.btn-excel:hover{background:#2a9d5c;transform:translateY(-1px);box-shadow:0 4px 20px #2a9d5c44}
 .card{background:#111820;border:1px solid #1e2d3d;border-radius:8px;padding:24px}
 .tag-badge{display:inline-block;padding:4px 12px;border-radius:3px;font-size:12px;letter-spacing:1px}
 .check-box{width:22px;height:22px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
@@ -59,6 +61,27 @@ const { useState, useRef, useEffect } = React;
 const STATUS = { idle:"idle", found:"found", notfound:"notfound", adding:"adding", success:"success" };
 
 function getCol(room) { return db.collection("rooms").doc(room).collection("tags"); }
+
+function exportToExcel(records, roomCode) {
+  const data = records.map(r => ({
+    "TAG": r.tag,
+    "Planilla Calidad": r.estado_calidad ? "✓ SÍ" : "✗ NO",
+    "Planilla Precomisionado": r.estado_precomisionado ? "✓ SÍ" : "✗ NO",
+    "Estado": r.estado_calidad && r.estado_precomisionado ? "COMPLETADO" : "PENDIENTE",
+    "Fecha": r.fecha || "",
+    "Responsable": r.responsable || "",
+    "Link": r.link || "",
+    "Notas": r.notas || ""
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  // Column widths
+  ws["!cols"] = [14,20,24,14,14,22,32,40].map(w=>({wch:w}));
+  // Header style row highlight
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "TAGs");
+  const fecha = new Date().toISOString().split("T")[0];
+  XLSX.writeFile(wb, `TAG_TRACKER_${roomCode}_${fecha}.xlsx`);
+}
 
 function ImportWizard({ tags, db: dbProp, onFinish, onCancel }) {
   const [idx, setIdx] = useState(0);
@@ -200,7 +223,6 @@ function App() {
   const chatEndRef = useRef(null);
   const fileRef = useRef(null);
 
-  // Suscripción Firestore en tiempo real
   useEffect(() => {
     if (!roomCode) return;
     setLoading(true);
@@ -496,9 +518,19 @@ function App() {
         </div>}
 
         {tab==="registro"&&<div className="fade-in">
-          <div style={{marginBottom:20}}>
-            <h2 style={{fontSize:24,fontWeight:700,color:"#e2e8f0",letterSpacing:2}}>BASE DE DATOS</h2>
-            <p style={{fontSize:12,color:"#4a6a5a"}}>// {records.length} registros — sala: {roomCode}</p>
+          <div style={{marginBottom:20,display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
+            <div>
+              <h2 style={{fontSize:24,fontWeight:700,color:"#e2e8f0",letterSpacing:2}}>BASE DE DATOS</h2>
+              <p style={{fontSize:12,color:"#4a6a5a"}}>// {records.length} registros — sala: {roomCode}</p>
+            </div>
+            <button
+              onClick={()=>exportToExcel(records, roomCode)}
+              className="btn btn-excel"
+              disabled={records.length===0}
+              style={{display:"flex",alignItems:"center",gap:8,opacity:records.length===0?0.4:1}}
+            >
+              <span style={{fontSize:16}}>📥</span> EXPORTAR EXCEL
+            </button>
           </div>
           <div className="card" style={{padding:0,overflow:"hidden"}}>
             <div style={{overflowX:"auto"}}>
